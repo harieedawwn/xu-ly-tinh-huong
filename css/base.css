@@ -1,0 +1,32 @@
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); }
+body {
+  font-family: var(--font); font-size: var(--fs-m); line-height: 1.5; font-weight: 400;
+  -webkit-font-smoothing: antialiased; overscroll-behavior: none; touch-action: manipulation;
+  font-variant-numeric: tabular-nums;
+}
+h1, h2, h3, p { margin: 0; }
+h1, h2, h3 { font-weight: 800; line-height: 1.15; letter-spacing: -0.01em; text-wrap: balance; }
+h1 { font-size: var(--fs-xxl); }
+h2 { font-size: var(--fs-xl); }
+h3 { font-size: var(--fs-l); }
+p { text-wrap: pretty; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+[hidden] { display: none !important; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.muted { color: var(--muted); }
+.strong { font-weight: 800; }
+.s { font-size: var(--fs-s); }
+.xs { font-size: var(--fs-xs); }
+
+/* App shell: height follows the visual viewport (set by js/lib/viewport.js), 100dvh as the first fallback */
+#app { position: fixed; left: 0; right: 0; top: var(--app-top, 0px); height: var(--app-h, 100dvh); display: flex; flex-direction: column; overflow: hidden; }
+@supports not (height: 100dvh) { #app { height: var(--app-h, 100vh); } }
+
+.icon { width: 1.25em; height: 1.25em; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: square; stroke-linejoin: miter; vertical-align: -0.2em; }
+
+.boot { margin: auto; font-weight: 800; font-size: var(--fs-l); }

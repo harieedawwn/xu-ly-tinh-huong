@@ -1,0 +1,9 @@
+{
+  "name": "xu-ly-tinh-huong",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test "tools/test/*.test.mjs"",
+    "serve": "node tools/serve.mjs"
+  }
+}

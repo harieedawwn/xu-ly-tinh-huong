@@ -1,0 +1,12 @@
+{
+  "name": "xlth-tools",
+  "private": true,
+  "type": "module",
+  "description": "Dev tooling only. Never loaded by the site.",
+  "devDependencies": {
+    "firebase": "^13.2.0",
+    "firebase-tools": "^15.35.0",
+    "lucide-static": "^1.72.0",
+    "playwright-core": "^1.65.0"
+  }
+}
