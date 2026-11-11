@@ -1,0 +1,14 @@
+```json
+{
+  "selected": [
+    { "id": "P04", "highlight": "Em sẽ nói "thật lòng" với bố mẹ và hỏi "con cần làm gì để hai bên yên tâm?"", "suggestedScore": 9, "reason": "Bài viết "rất chân thành", biết lắng nghe." },
+    { "id": "P08", "highlight": "Chọn thử "một tuần thiết kế" trước khi quyết định.", "suggestedScore": 8, "reason": "Có kiểm chứng." }
+  ],
+  "rejected": [ { "id": "P03", "reason": "Chỉ lặp lại câu "hãy cố gắng" mà không có hành động." } ],
+  "hostScript": {
+    "opening": "Các bạn nghe thử câu này: "ai cũng muốn tốt cho con".",
+    "perOption": [ { "id": "P04", "speech": "Bạn này dùng cụm "thật lòng" rất đúng chỗ, các bạn ạ." } ],
+    "closing": "Hết."
+  }
+}
+```

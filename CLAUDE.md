@@ -7,6 +7,7 @@ UI text is Vietnamese with diacritics; code and docs are English. The role is "H
 - Serve: `node tools/serve.mjs` -> http://127.0.0.1:5173/ (`.claude/launch.json` has it). Add `?emu=1` to use local emulators.
 - Unit tests: `npm test` (node --test, tools/test/*.test.mjs).
 - Rules + e2e on emulators: `node tools/with-emulator.mjs node tools/rules-test.mjs --emulator`, `... node tools/e2e.mjs`.
+- Stage 2: `... e2e-s2.mjs`, `... perf-s2.mjs` (both under with-emulator), `node tools/ai-roundtrip.mjs [--verify]`. Screens: `js/screens/host/*`.
 - Real DB rules test: `node tools/rules-test.mjs`. Live e2e: `E2E_URL=https://harieedawwn.github.io/xu-ly-tinh-huong/ node tools/e2e.mjs --live`.
 - Rules: edit `tools/build-rules.mjs`, run `node tools/build-rules.mjs` (never hand-edit database.rules.json). Deploy: `cd tools && npx firebase deploy --only database --project xu-ly-tinh-huong --config ../firebase.json`, or paste the file in Console.
 - Publish = commit + push to `main` (the owner's rule: no branches, git only to publish). Pages serves root.
@@ -14,6 +15,12 @@ UI text is Vietnamese with diacritics; code and docs are English. The role is "H
 
 ## Data paths (details in SPEC.md)
 `/secrets/{code}/pin` (unreadable), `/rooms/{code}/{hostUids,hostClaims,claimTries,public,private,players,presence,reps,answers/{round}/{uid},submitted/{round}/{uid},votes/{round}/{uid},banned}`.
+
+## Stage 2 architecture
+- Phase changes ONLY through `js/lib/phases.js` `transition()` run by `lib/tx.js` (transaction on `public`); screens never write `public/phase`. Dock buttons are disarmed 700 ms after a phase change.
+- Settings ranges live in `js/lib/settings.js` (SETTING_SPECS) and feed the rules generator. New write = payload in `room-ops.js` + rule in `build-rules.mjs` + case in `rules-test.mjs`.
+- `ctx.ref.current` (host/data.js) is the latest data for async actions; never read stale props in actions. Rows use `memo`; pass primitives.
+- Players never read `private/*`; names reach phones/TV only through `public/reveal`.
 
 ## Gotchas
 - RTDB rules have no `newRoot`; use `newData.parent()`. `\s` is not valid in rules regex. Rule `.write` at a parent cascades to children.

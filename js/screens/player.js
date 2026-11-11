@@ -10,6 +10,8 @@ import { store, K } from '../lib/storage.js';
 import { canFullscreen } from '../lib/device.js';
 import { toggleFullscreen, fullscreenElement } from '../lib/viewport.js';
 import { routeHash } from '../lib/route.js';
+import { withDefaults } from '../lib/settings.js';
+import { PlayerReviewing, PlayerShowcase, PlayerVoting, PlayerScoring, PlayerReveal, PlayerLeaderboard } from './player-views.js';
 
 const NAME_ERR = {
   empty: 'Nhập tên của bạn.',
@@ -57,7 +59,7 @@ function JoinForm({ code, uid, pub, players }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    const v = validateName(name);
+    const v = validateName(name, { extra: pub.settings?.badWords ? Object.values(pub.settings.badWords) : [] });
     if (!v.ok) { setErr(NAME_ERR[v.error]); return; }
     if (!team || !teams.some((t) => t.id === team)) { setErr('Chọn tổ của bạn.'); return; }
     setBusy(true); setErr('');
@@ -251,7 +253,7 @@ export function PlayerScreen({ code, uid }) {
   if (banQ.value === true) return html`<main class="player scroll"><div class="card stack"><h2>Bạn đã rời phòng</h2><p>Host đã mời bạn ra khỏi phòng này.</p><a class="btn" href="#/">Về trang chủ</a></div></main>`;
   if (!me) return html`<${JoinForm} code=${code} uid=${uid} pub=${pub} players=${playersQ.value} />`;
 
-  const settings = pub.settings || {};
+  const settings = withDefaults(pub.settings);
   const phase = pub.phase;
   let body;
   if (phase === 'lobby') {
@@ -261,6 +263,20 @@ export function PlayerScreen({ code, uid }) {
       ${settings.mode === 'team' ? html`<${RepBlock} code=${code} uid=${uid} me=${me} teams=${settings.teams} reps=${repsQ.value} players=${playersQ.value} />` : null}</div>`;
   } else if (phase === 'answering') {
     body = html`<${Answering} key=${pub.roundId} code=${code} uid=${uid} me=${me} pub=${{ ...pub, settings }} reps=${repsQ.value} players=${playersQ.value} />`;
+  } else if (phase === 'locked') {
+    body = html`<${Locked} code=${code} uid=${uid} pub=${pub} />`;
+  } else if (phase === 'reviewing') {
+    body = html`<${PlayerReviewing} />`;
+  } else if (phase === 'showcase') {
+    body = html`<${PlayerShowcase} pub=${pub} />`;
+  } else if (phase === 'voting') {
+    body = html`<${PlayerVoting} key=${pub.roundId} code=${code} uid=${uid} pub=${pub} />`;
+  } else if (phase === 'scoring') {
+    body = html`<${PlayerScoring} />`;
+  } else if (phase === 'reveal') {
+    body = html`<${PlayerReveal} pub=${pub} uid=${uid} me=${me} teams=${settings.teams} />`;
+  } else if (phase === 'leaderboard') {
+    body = html`<${PlayerLeaderboard} pub=${pub} uid=${uid} me=${me} teams=${settings.teams} players=${playersQ.value || {}} />`;
   } else {
     body = html`<${Locked} code=${code} uid=${uid} pub=${pub} />`;
   }

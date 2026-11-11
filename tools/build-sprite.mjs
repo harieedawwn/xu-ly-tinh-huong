@@ -18,6 +18,8 @@ export const ICONS = {
   shield: 'shield', trophy: 'trophy', exit: 'log-out', alert: 'triangle-alert', 'check-circle': 'circle-check',
   key: 'key-round', share: 'share-2', external: 'external-link', door: 'door-open', ban: 'ban',
   'user-x': 'user-x', hourglass: 'hourglass', undo: 'rotate-ccw', timer: 'timer', megaphone: 'megaphone',
+  up: 'chevron-up', search: 'search', upload: 'upload', book: 'book-open', hand: 'hand', award: 'award', file: 'file-text',
+  bot: 'bot', volume: 'volume-2', list: 'list-ordered', flag: 'flag', 'copy-plus': 'copy-plus',
 };
 
 function inner(svg) {

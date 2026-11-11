@@ -4,12 +4,17 @@
 // Creates a throwaway room (random code), checks allowed and forbidden actions, then deletes the room.
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, signInAnonymously, connectAuthEmulator } from 'firebase/auth';
-import { getDatabase, ref, get, set, update, remove, onValue, serverTimestamp, connectDatabaseEmulator, goOffline } from 'firebase/database';
+import { getDatabase, ref, get, set, update, remove, onValue, serverTimestamp, connectDatabaseEmulator, goOffline, runTransaction, increment } from 'firebase/database';
 import { firebaseConfig } from '../js/firebase-config.js';
 import { generateCode } from '../js/lib/roomcode.js';
 import { defaultTeams } from '../js/lib/teams.js';
 import * as ops from '../js/lib/room-ops.js';
 import { startTimer } from '../js/lib/timer.js';
+import { A, transition } from '../js/lib/phases.js';
+import { runTransition } from '../js/lib/tx.js';
+import { rankOptions, buildAward, buildReveal, totals } from '../js/lib/scoring.js';
+import { defaultBank } from '../js/lib/bank.js';
+import { DEFAULT_SETTINGS, resizeTeams } from '../js/lib/settings.js';
 
 const EMU = process.argv.includes('--emulator') || process.env.EMULATOR === '1';
 let code = generateCode();
@@ -300,8 +305,242 @@ async function appPayloads() {
   if (!gone.exists()) { pass++; console.log('  ok    room is gone'); } else { fail++; failures.push('app payload room not deleted'); console.log('  FAIL  room still exists'); }
 }
 
+
+// ================================================================================================
+// Stage 2: every new write path (settings, tổ, bank, review, AI import, showcase, voting, scores, awards,
+// adjustments, reveal, board, bans, reps) with the exact payloads the app builds.
+// ================================================================================================
+async function stage2() {
+  code = generateCode();
+  const host = await client('s2host');
+  const [h2, p1, p2, p3, p4, tv, evil] = await Promise.all(['s2h2', 's2p1', 's2p2', 's2p3', 's2p4', 's2tv', 's2evil'].map(client));
+  const root = (c) => P(c, '');
+  const tx = (c) => ({ runTransaction, ref: P(c, R('public')) });
+  const pending = (c, action, args) => runTransition(tx(c), action, args);
+  const okT = async (label, c, action, args) => { const r = await pending(c, action, args); if (r.ok) { pass++; console.log(`  ok    ${label}`); } else { fail++; failures.push(label); console.log(`  FAIL  ${label}  (${r.error})`); } return r; };
+  const refT = async (label, c, action, args, why) => { const r = await pending(c, action, args); if (!r.ok && (!why || r.error === why)) { pass++; console.log(`  ok    ${label}  [refused: ${r.error}]`); } else { fail++; failures.push(label); console.log(`  FAIL  ${label}  (${r.ok ? 'applied' : r.error})`); } };
+
+  await allow('create room with the app payload', update(root(host), ops.createRoomUpdates({ code, uid: host.uid, pin: PIN, ts: serverTimestamp() })));
+  await allow('second device claims host with the PIN', (async () => {
+    await update(root(h2), ops.claimGuessUpdates({ code, uid: h2.uid, pin: PIN, tries: 0 }));
+    await set(P(h2, R(`hostUids/${h2.uid}`)), true);
+  })());
+  await allow('p1 joins Tổ 1', set(P(p1, R(`players/${p1.uid}`)), ops.joinRecord({ name: 'An', team: 't1', ts: serverTimestamp() })));
+  await allow('p2 joins Tổ 1', set(P(p2, R(`players/${p2.uid}`)), ops.joinRecord({ name: 'Bình', team: 't1', ts: serverTimestamp() })));
+  await allow('p3 joins Tổ 2', set(P(p3, R(`players/${p3.uid}`)), ops.joinRecord({ name: 'Chi', team: 't2', ts: serverTimestamp() })));
+  await allow('p4 joins Tổ 4', set(P(p4, R(`players/${p4.uid}`)), ops.joinRecord({ name: 'Dũng', team: 't4', ts: serverTimestamp() })));
+
+  section('S2 settings: ranges are enforced by the rules');
+  const setting = (c, key, value) => update(root(c), { [R(`public/settings/${key}`)]: value });
+  for (const [k, v] of [['maxScore', 20], ['scoreStep', 1], ['formula', 'mix'], ['voteWeight', 30], ['awardTop', 3], ['teamAward', 'place'], ['tvSize', 'XL'], ['tvTheme', 'dark'], ['tvSound', true], ['tvQr', false],
+    ['aiN', 5], ['aiHideNames', true], ['aiCriteria', false], ['phoneVoting', false], ['liveTally', true], ['addMs', 15000], ['defaultSecs', 90], ['minChars', 10], ['maxChars', 500], ['graceMs', 2000], ['autoSubmit', false], ['mode', 'team']]) {
+    await allow(`host sets ${k} = ${v}`, setting(host, k, v));
+  }
+  await allow('settingUpdate builder output is accepted', update(root(host), ops.settingUpdate({ code, key: 'maxScore', value: '100' })));
+  for (const [k, v] of [['maxScore', 0], ['maxScore', 1001], ['maxScore', 'mười'], ['scoreStep', 0.7], ['formula', 'median'], ['voteWeight', 120], ['awardTop', 2], ['teamAward', 'all'],
+    ['tvSize', 'XXL'], ['tvTheme', 'blue'], ['tvSound', 'yes'], ['aiN', 20], ['aiN', 0], ['minChars', 0], ['maxChars', 5000], ['graceMs', 60000], ['mode', 'solo'], ['lockJoin', 1]]) {
+    await deny(`host cannot set ${k} = ${JSON.stringify(v)}`, setting(host, k, v));
+  }
+  check_(ops.settingUpdate({ code, key: 'maxScore', value: 0 }) !== null, 'settingUpdate clamps 0 to 1 (so the UI never sends an invalid value)');
+  check_(ops.settingUpdate({ code, key: 'formula', value: 'median' }) === null, 'settingUpdate refuses an unknown formula');
+  await deny('player cannot change a setting', setting(p1, 'maxScore', 5));
+  await deny('TV cannot change a setting', setting(tv, 'maxScore', 5));
+  await allow('restore defaults', update(root(host), { [R('public/settings')]: { ...DEFAULT_SETTINGS, teams: defaultTeams(4) } }));
+  await allow('host adds profanity words', update(root(host), ops.badWordsUpdate({ code, words: ['từ xấu', 'abc def'] })));
+  await deny('profanity word of 1 character is rejected', update(root(host), { [R('public/settings/badWords')]: ['x'] }));
+  await deny('player cannot add profanity words', update(root(p1), ops.badWordsUpdate({ code, words: ['hack'] })));
+  await allow('player reads the words (public)', get(P(p1, R('public/settings/badWords'))));
+
+  section('S2 tổ: count, names, move, representatives');
+  await allow('rename tổ', set(P(host, R('public/settings/teams/t1/name')), 'Tổ Sao'));
+  await deny('tổ name of 21 characters is rejected', set(P(host, R('public/settings/teams/t2/name')), 'x'.repeat(21)));
+  await deny('tổ t7 cannot exist', set(P(host, R('public/settings/teams/t7')), { name: 'Tổ 7' }));
+  await deny('player cannot rename a tổ', set(P(p1, R('public/settings/teams/t1/name')), 'Hack'));
+  await allow('host renames a player (renamePlayerUpdates)', update(root(host), ops.renamePlayerUpdates({ code, uid: p2.uid, name: 'Bình An' })));
+  await deny('host cannot rename to 1 character', update(root(host), ops.renamePlayerUpdates({ code, uid: p2.uid, name: 'B' })));
+  await allow('second host moves p2 to Tổ 2 (movePlayerUpdates)', update(root(h2), ops.movePlayerUpdates({ code, uid: p2.uid, team: 't2' })));
+  await deny('move to a missing tổ is rejected', update(root(host), ops.movePlayerUpdates({ code, uid: p2.uid, team: 't9' })));
+  await deny('player cannot move another player', update(root(p1), ops.movePlayerUpdates({ code, uid: p3.uid, team: 't1' })));
+  await allow('host assigns a representative (repUpdates)', update(root(host), ops.repUpdates({ code, teamId: 't2', uid: p3.uid })));
+  await allow('host reassigns the representative', update(root(h2), ops.repUpdates({ code, teamId: 't2', uid: p2.uid })));
+  await allow('host clears the representative', update(root(host), ops.repUpdates({ code, teamId: 't2', uid: null })));
+  await deny('player cannot assign a representative for another uid', update(root(p1), ops.repUpdates({ code, teamId: 't1', uid: p2.uid })));
+  await allow('p3 reads reps', get(P(p3, R('reps'))));
+  await allow('shrink to 2 tổ: teams + moves + rep clean-up in one update', (async () => {
+    const players = (await get(P(host, R('players')))).val();
+    const { teams, moves } = resizeTeams((await get(P(host, R('public/settings/teams')))).val(), players, 2);
+    await update(root(host), ops.teamsUpdates({ code, teams, moves }));
+  })());
+  const dung = (await get(P(host, R(`players/${p4.uid}`)))).val();
+  check_(dung.team === 't1', 'the player of the removed Tổ 4 now sits in Tổ 1');
+  await allow('grow back to 4 tổ', update(root(host), ops.teamsUpdates({ code, teams: defaultTeams(4), moves: [] })));
+  await allow('p4 goes back to Tổ 4', update(root(host), ops.movePlayerUpdates({ code, uid: p4.uid, team: 't4' })));
+
+  section('S2 private paths: bank, review, order, aid, ai, optionOf, hand, awards, adjust');
+  const priv = (c, path, v) => set(P(c, R(`private/${path}`)), v);
+  await allow('host stores the question bank', update(root(host), ops.bankUpdate({ code, bank: defaultBank() })));
+  await deny('bank entry with a 5-second default time is rejected', priv(host, 'bank/0', { id: 'x', title: 'T', text: 'N'.repeat(30), time: 5 }));
+  await deny('bank entry with an 81-character title is rejected', priv(host, 'bank/0', { id: 'x', title: 'T'.repeat(81), text: 'N'.repeat(30), time: 90 }));
+  await deny('bank entry missing the text is rejected', priv(host, 'bank/0', { id: 'x', title: 'T', time: 90 }));
+  await deny('player cannot read the bank', get(P(p1, R('private/bank'))));
+  await deny('player cannot write the bank', priv(p1, 'bank/0', { id: 'x', title: 'T', text: 'N'.repeat(30), time: 90 }));
+  await allow('second host reads the bank', get(P(h2, R('private/bank'))));
+
+  await allow('review: choose an answer with highlight and AI score (reviewUpdates)', update(root(host), ops.reviewUpdates({ code, roundId: 'r1', uid: p1.uid, patch: { st: 'chosen', hl: 'Nổi bật', ai: 8.5, score: 8.5, reason: 'Tốt' } })));
+  await allow('review: display-text edit keeps the original (edit is a separate field)', update(root(host), ops.reviewUpdates({ code, roundId: 'r1', uid: p1.uid, patch: { edit: 'Bản đã sửa lỗi chính tả.' } })));
+  await allow('review: clear the choice', update(root(host), ops.reviewUpdates({ code, roundId: 'r1', uid: p1.uid, patch: { st: null } })));
+  await deny('review: unknown state is rejected', update(root(host), ops.reviewUpdates({ code, roundId: 'r1', uid: p1.uid, patch: { st: 'maybe' } })));
+  await deny('review: score above 1000 is rejected', update(root(host), ops.reviewUpdates({ code, roundId: 'r1', uid: p1.uid, patch: { score: 2000 } })));
+  await deny('review: negative score is rejected', update(root(host), ops.scoreUpdate({ code, roundId: 'r1', uid: p1.uid, score: -1 })));
+  await deny('review: extra field is rejected', update(root(host), ops.reviewUpdates({ code, roundId: 'r1', uid: p1.uid, patch: { admin: true } })));
+  await allow('review: score update (scoreUpdate)', update(root(host), ops.scoreUpdate({ code, roundId: 'r1', uid: p1.uid, score: 9 })));
+  await deny('player cannot read review', get(P(p1, R('private/review'))));
+  await deny('player cannot write a score', update(root(p1), ops.scoreUpdate({ code, roundId: 'r1', uid: p1.uid, score: 10 })));
+  await allow('order (orderUpdate)', update(root(host), ops.orderUpdate({ code, roundId: 'r1', order: [p1.uid, p2.uid] })));
+  await deny('order with a non-string entry is rejected', priv(host, 'order/r1/0', 5));
+  await allow('answer ids (aidUpdate)', update(root(host), ops.aidUpdate({ code, roundId: 'r1', map: { [p1.uid]: 'P01', [p2.uid]: 'P02' } })));
+  await deny('answer id in a wrong format is rejected', priv(host, `aid/r1/${p1.uid}`, 'Q1'));
+  const parsed = { status: 'json', raw: '```json {} ```', selected: [{ id: 'P01', highlight: 'Nổi bật', suggestedScore: 8, reason: 'Tốt' }], rejected: [{ id: 'P02', reason: 'Đùa' }], script: { opening: 'Mở', perOption: [{ id: 'P01', speech: 'Nói' }], closing: 'Kết' }, foundIds: [], warnings: [] };
+  await allow('AI import: selection + scores + order + script in one update (aiImportUpdates)', update(root(host), ops.aiImportUpdates({ code, roundId: 'r1', parsed, uidOf: { P01: p1.uid, P02: p2.uid }, at: serverTimestamp() })));
+  await allow('AI import of free text (no script) is accepted', update(root(host), ops.aiImportUpdates({ code, roundId: 'r1', parsed: { ...parsed, status: 'free', script: null, selected: [], rejected: [], foundIds: ['P01'], warnings: [{ text: 'w' }] }, uidOf: { P01: p1.uid }, at: serverTimestamp() })));
+  await deny('AI raw text over 60 000 characters is rejected', priv(host, 'ai/r1/raw', 'x'.repeat(60001)));
+  await deny('player cannot read the AI result or script', get(P(p1, R('private/ai'))));
+  await allow('option mapping, whole class (optionOfUpdates)', update(root(host), ops.optionOfUpdates({ code, roundId: 'r1', options: [{ uid: p1.uid, team: 't1' }, { uid: p3.uid, team: 't2' }], players: {}, mode: 'all' })));
+  await deny('option index 12 is rejected', priv(host, `optionOf/r1/${p4.uid}`, 12));
+  await deny('player cannot read optionOf (would reveal authors)', get(P(p1, R('private/optionOf'))));
+  await deny('player cannot write optionOf', priv(p1, `optionOf/r1/${p1.uid}`, 1));
+  await allow('hand count +1 (atomic increment)', update(root(host), ops.handUpdate({ code, roundId: 'r1', option: 0, delta: 1, inc: increment })));
+  await allow('hand count +1 from the second host', update(root(h2), ops.handUpdate({ code, roundId: 'r1', option: 0, delta: 1, inc: increment })));
+  check_((await get(P(host, R('private/hand/r1/0')))).val() === 2, 'two hosts incrementing at once: both counted');
+  await allow('hand count -1', update(root(host), ops.handUpdate({ code, roundId: 'r1', option: 0, delta: -1, inc: increment })));
+  await allow('hand count back to 0', update(root(host), ops.handUpdate({ code, roundId: 'r1', option: 0, delta: -1, inc: increment })));
+  await deny('hand count cannot go below 0', update(root(host), ops.handUpdate({ code, roundId: 'r1', option: 0, delta: -1, inc: increment })));
+  await deny('player cannot change hand counts', update(root(p1), ops.handUpdate({ code, roundId: 'r1', option: 1, delta: 1, inc: increment })));
+  await deny('adjustment to a missing tổ id is rejected', update(root(host), ops.adjustUpdate({ code, key: 'k0', team: 't9', delta: 1, at: serverTimestamp() })));
+  await deny('adjustment of +5000 is rejected', update(root(host), ops.adjustUpdate({ code, key: 'k0', team: 't1', delta: 5000, at: serverTimestamp() })));
+  await allow('manual adjustment +2 with a note (adjustUpdate)', update(root(host), ops.adjustUpdate({ code, key: 'k1', team: 't1', delta: 2, at: serverTimestamp(), note: 'Giúp bạn' })));
+  await allow('manual adjustment -1', update(root(h2), ops.adjustUpdate({ code, key: 'k2', team: 't2', delta: -1, at: serverTimestamp() })));
+  await deny('player cannot adjust points', update(root(p1), ops.adjustUpdate({ code, key: 'k3', team: 't1', delta: 100, at: serverTimestamp() })));
+  await deny('player cannot read the adjustment log', get(P(p1, R('private/adjust'))));
+  await deny('award without "at" or "items" is rejected', priv(host, 'awards/r1', { x: 1 }));
+  await deny('player cannot write an award', priv(p1, 'awards/r1', { at: 1, items: [] }));
+
+  section('S2 phases through the real rules: transaction on public, the same code the app runs');
+  await allow('set tổ mode off, normal limits', update(root(host), { [R('public/settings/mode')]: 'all', [R('public/settings/minChars')]: 20, [R('public/settings/maxChars')]: 800, [R('public/settings/graceMs')]: 3000 }));
+  const q = { id: 'b1', title: 'Y Dược hay thiết kế', text: 'Nội dung tình huống đủ dài để hợp lệ.' };
+  await refT('player cannot start a round (rules refuse the transaction write)', p1, A.START, { question: q, durationMs: 60_000, now: p1.now() }, 'aborted').catch(() => {});
+  const started = await okT('host starts the round (transaction)', host, A.START, { question: q, durationMs: 60_000, now: host.now() });
+  const rid = started.pub?.roundId;
+  check_(rid === 'r1', `round id r1 (got ${rid})`);
+  // two answers (host-written, as an admin seed would) so the showcase has real authors
+  await allow('p1 submits', update(root(p1), ops.submitUpdates({ code, roundId: rid, uid: p1.uid, text: 'Mình sẽ nói chuyện thẳng với bố mẹ và đưa ra bảng so sánh.', ts: serverTimestamp() })));
+  await allow('p3 submits', update(root(p3), ops.submitUpdates({ code, roundId: rid, uid: p3.uid, text: 'Mình thử làm một dự án thiết kế nhỏ trong ba ngày.', ts: serverTimestamp() })));
+  await allow('p4 submits', update(root(p4), ops.submitUpdates({ code, roundId: rid, uid: p4.uid, text: 'Mình hỏi cô hướng nghiệp trước khi nói với bố mẹ.', ts: serverTimestamp() })));
+  const [l1, l2] = await Promise.all([pending(host, A.LOCK, {}), pending(h2, A.LOCK, {})]);
+  check_([l1, l2].filter((r) => r.ok).length === 1, 'TWO HOSTS lock at the same moment: exactly one transaction wins');
+  check_([l1, l2].filter((r) => !r.ok).every((r) => r.error === 'wrongPhase'), 'the other host is told the phase already changed');
+  await refT('locking again is refused (stale button on the second device)', h2, A.LOCK, {}, 'wrongPhase');
+  await okT('second host moves to reviewing', h2, A.REVIEW, {});
+  await refT('showcase with no items is refused', host, A.SHOWCASE, { items: [] }, 'noItems');
+  const items = [{ text: 'Mình sẽ nói chuyện thẳng với bố mẹ và đưa ra bảng so sánh.', hl: 'Nói thẳng, có bảng so sánh' }, { text: 'Mình thử làm một dự án thiết kế nhỏ trong ba ngày.', hl: '' }, { text: 'Mình hỏi cô hướng nghiệp trước.', hl: 'Hỏi người có kinh nghiệm' }];
+  await okT('showcase pushed to everybody (names stay out)', host, A.SHOWCASE, { items });
+  const sc = (await get(P(p2, R('public/showcase')))).val();
+  check_(sc.items.length === 3 && !JSON.stringify(sc).includes(p1.uid), 'a player reads the showcase: text + highlight, no uid');
+  await allow('focus option 1 on the TV (focusUpdate)', update(root(host), ops.focusUpdate({ code, focus: 1 })));
+  await deny('focus on option 99 is rejected', update(root(host), ops.focusUpdate({ code, focus: 99 })));
+  await allow('quick edit: push edited items (showcaseItemsUpdate)', update(root(host), ops.showcaseItemsUpdate({ code, items: items.map((it) => ({ ...it, text: it.text + ' (sửa)' })) })));
+  await deny('showcase item over 2000 characters is rejected', update(root(host), ops.showcaseItemsUpdate({ code, items: [{ text: 'x'.repeat(2001), hl: '' }] })));
+  await deny('showcase item with an extra field (author) is rejected', update(root(host), ops.showcaseItemsUpdate({ code, items: [{ text: 'ok', hl: '', uid: p1.uid }] })));
+  await deny('player cannot write the showcase', update(root(p1), ops.showcaseItemsUpdate({ code, items })));
+  await allow('TV reads the showcase', get(P(tv, R('public/showcase'))));
+  await allow('author mapping for voting (options 0,1,2 = p1,p3,p4)', update(root(host), ops.optionOfUpdates({ code, roundId: rid, options: [{ uid: p1.uid, team: 't1' }, { uid: p3.uid, team: 't2' }, { uid: p4.uid, team: 't4' }], players: {}, mode: 'all' })));
+
+  section('S2 voting through the phase machine (phone voting + live tally + hand raise)');
+  await okT('open voting with phone voting and live tally', host, A.OPEN_VOTING, { phone: true, live: true });
+  await allow('p1 votes option 1', set(P(p1, R(`votes/${rid}/${p1.uid}`)), 1));
+  await deny('p1 cannot vote for own option 0', set(P(p1, R(`votes/${rid}/${p1.uid}`)), 0));
+  await allow('p1 changes the vote to option 2 (still one vote per uid)', set(P(p1, R(`votes/${rid}/${p1.uid}`)), 2));
+  await deny('p3 cannot vote for own option 1', set(P(p3, R(`votes/${rid}/${p3.uid}`)), 1));
+  await allow('p3 votes option 0', set(P(p3, R(`votes/${rid}/${p3.uid}`)), 0));
+  await allow('p2 (no option) votes option 2', set(P(p2, R(`votes/${rid}/${p2.uid}`)), 2));
+  await deny('vote for option 3 (only 3 options) is rejected', set(P(p2, R(`votes/${rid}/${p2.uid}`)), 3));
+  await allow('host publishes the live tally (tallyUpdate)', update(root(host), ops.tallyUpdate({ code, tally: [1, 0, 2], n: 3 })));
+  await deny('tally with a negative count is rejected', update(root(host), ops.tallyUpdate({ code, tally: [-1, 0, 2], n: 3 })));
+  await deny('player cannot write the tally', update(root(p1), ops.tallyUpdate({ code, tally: [9, 9, 9], n: 9 })));
+  await allow('TV reads the live tally', get(P(tv, R('public/vote/tally'))));
+  await allow('host reads every vote', get(P(host, R(`votes/${rid}`))));
+  await okT('host closes phone voting (setVoteOpen)', h2, A.SET_VOTE_OPEN, { open: false });
+  await deny('vote after the host closed voting is rejected', set(P(p4, R(`votes/${rid}/${p4.uid}`)), 0));
+  await okT('reopen phone voting', host, A.SET_VOTE_OPEN, { open: true });
+  await allow('vote is accepted again', set(P(p4, R(`votes/${rid}/${p4.uid}`)), 0));
+  await okT('going back to the showcase clears the vote state', host, A.BACK_SHOWCASE, {});
+  await allow('votes and hand counts cleared (clearVotesUpdates)', update(root(host), ops.clearVotesUpdates({ code, roundId: rid })));
+  check_(!(await get(P(host, R(`votes/${rid}`)))).exists(), 'old votes are gone after going back');
+  await deny('vote while the phase is showcase is rejected', set(P(p4, R(`votes/${rid}/${p4.uid}`)), 0));
+
+  section('S2 team mode: tổ-mates of an author cannot vote for their tổ');
+  await allow('team-mode mapping adds the author’s tổ-mates (optionOfUpdates, mode team)', update(root(host), ops.optionOfUpdates({
+    code, roundId: rid, mode: 'team',
+    options: [{ uid: p1.uid, team: 't1' }, { uid: p3.uid, team: 't2' }, { uid: p4.uid, team: 't4' }],
+    players: { [p1.uid]: { team: 't1' }, [p2.uid]: { team: 't2' }, [p3.uid]: { team: 't2' }, [p4.uid]: { team: 't4' } },
+  })));
+  await okT('open voting again', host, A.OPEN_VOTING, { phone: true });
+  await deny('p2 is in the same tổ as author p3 (option 1): cannot vote option 1', set(P(p2, R(`votes/${rid}/${p2.uid}`)), 1));
+  await allow('p2 votes option 0', set(P(p2, R(`votes/${rid}/${p2.uid}`)), 0));
+  await okT('close voting', host, A.CLOSE_VOTING, {});
+
+  section('S2 scoring, award, reveal, board, undo, reset');
+  const ranked = rankOptions([
+    { key: p1.uid, n: 0, team: 't1', name: 'An', text: 'a', score: 8, votes: 1, t0: 1 },
+    { key: p3.uid, n: 1, team: 't2', name: 'Chi', text: 'b', score: 9, votes: 1, t0: 2 },
+    { key: p4.uid, n: 2, team: 't4', name: 'Dũng', text: 'c', score: 7, votes: 2, t0: 3 },
+  ], { maxScore: 10, formula: 'host', awardTop: 3, teamAward: 'place' });
+  const award = { ...buildAward({ ranked, settings: { maxScore: 10, formula: 'host', awardTop: 3, teamAward: 'place' }, roundId: rid, at: serverTimestamp(), question: q.title }) };
+  const board = totals({ [rid]: { ...award, at: 1 } }, {});
+  await refT('reveal needs data', host, A.REVEAL, { reveal: { items: [] } }, 'noRevealData');
+  await okT('reveal with names, rank and board (transaction)', host, A.REVEAL, { reveal: buildReveal(award), board });
+  await allow('award stored once per round (awardUpdates)', update(root(host), ops.awardUpdates({ code, roundId: rid, award, board })));
+  await allow('applying the same award again is idempotent', update(root(h2), ops.awardUpdates({ code, roundId: rid, award, board })));
+  const stored = (await get(P(host, R('private/awards')))).val();
+  check_(Object.keys(stored).length === 1, 'one award record after two writes');
+  const rv = (await get(P(p2, R('public/reveal')))).val();
+  check_(rv.items.length === 3 && rv.items[0].name && !('text' in rv.items[0]), 'players read the reveal (names unlocked now, no answer text)');
+  const sortedJson = (o) => JSON.stringify(o, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort()) : v));
+  check_(sortedJson((await get(P(p2, R('public/board')))).val()) === sortedJson(board), 'players read the leaderboard');
+  await deny('player cannot write the reveal', set(P(p1, R('public/reveal/top')), 1));
+  await deny('player cannot write the board', set(P(p1, R('public/board/t/t1')), 999));
+  await deny('board with a non-number is rejected', set(P(host, R('public/board/t/t1')), 'lots'));
+  await deny('board for an unknown tổ is rejected', set(P(host, R('public/board/t/t9')), 1));
+  await deny('reveal item with a 41-character name is rejected', set(P(host, R('public/reveal/items/0/name')), 'x'.repeat(41)));
+  await deny('reveal item with an unknown field is rejected', set(P(host, R('public/reveal/items/0/secret')), 1));
+  await okT('leaderboard', host, A.LEADERBOARD, {});
+  await refT('undo from the second device while on the leaderboard goes back to scoring', h2, A.LEADERBOARD, {}, 'wrongPhase');
+  await okT('undo the award: phase back to scoring and the reveal is cleared', h2, A.UNREVEAL, { board: { t: {}, p: {} } });
+  await allow('award removed (removeAwardUpdates)', update(root(h2), ops.removeAwardUpdates({ code, roundId: rid, board: { t: {}, p: {} } })));
+  check_(!(await get(P(host, R('private/awards')))).exists() && !(await get(P(host, R('public/reveal')))).exists(), 'no award and no reveal left');
+  await okT('reveal again', host, A.REVEAL, { reveal: buildReveal(award), board });
+  await allow('award again', update(root(host), ops.awardUpdates({ code, roundId: rid, award, board })));
+  await okT('leaderboard again', host, A.LEADERBOARD, {});
+  await okT('next question: round state cleared, board kept', host, A.NEXT, {});
+  const after = (await get(P(host, R('public')))).val();
+  check_(after.phase === 'lobby' && !after.showcase && !after.vote && !after.reveal && !!after.board, 'lobby with a clean round and the board intact');
+  await allow('reset points (resetPointsUpdates)', update(root(host), ops.resetPointsUpdates({ code })));
+  check_(!(await get(P(host, R('public/board')))).exists() && !(await get(P(host, R('private/awards')))).exists() && !(await get(P(host, R('private/adjust')))).exists(), 'points, awards and the adjustment log are gone');
+  await deny('player cannot reset points', update(root(p1), ops.resetPointsUpdates({ code })));
+
+  section('S2 bans and kicks with the new data');
+  await allow('host kicks p4 (kickUpdates)', update(root(host), ops.kickUpdates({ code, uid: p4.uid, teamId: 't4', repUid: null })));
+  await deny('banned p4 cannot vote any more', set(P(p4, R(`votes/${rid}/${p4.uid}`)), 0));
+  await deny('banned p4 cannot write presence', set(P(p4, R(`presence/${p4.uid}`)), true));
+
+  section('S2 cleanup');
+  await allow('host ends the room', update(root(host), ops.endRoomUpdates({ code })));
+  check_(!(await get(P(host, R('public')))).exists(), 'room is gone');
+}
+function check_(cond, label) { if (cond) { pass++; console.log(`  ok    ${label}`); } else { fail++; failures.push(label); console.log(`  FAIL  ${label}`); } }
+
 let crashed = false;
-try { await main(); await appPayloads(); }
+try { await main(); await appPayloads(); await stage2(); }
 catch (e) { crashed = true; fail++; failures.push('crash: ' + (e?.message || e)); console.error('\nCRASH', e); }
 finally {
   // best-effort cleanup if the run died early

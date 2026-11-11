@@ -1,0 +1,10 @@
+```json
+{
+  "selected": [
+    { "id": "P02", "highlight": "Học thêm buổi tối ba ngày một tuần.", "suggestedScore": 8, "reason": "Khả thi.", },
+    { "id": "P06", "highlight": "Xin học bổng một phần.", "suggestedScore": 7.5, "reason": "Có nguồn lực.", },
+  ],
+  "rejected": [ { "id": "P01", "reason": "Văn mẫu.", }, ],
+  "hostScript": { "opening": "Mở.", "perOption": [ { "id": "P02", "speech": "Nói về P02.", }, ], "closing": "Đóng.", },
+}
+```

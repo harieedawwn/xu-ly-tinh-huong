@@ -24,7 +24,7 @@ a { color: inherit; }
 .xs { font-size: var(--fs-xs); }
 
 /* App shell: height follows the visual viewport (set by js/lib/viewport.js), 100dvh as the first fallback */
-#app { position: fixed; left: 0; right: 0; top: var(--app-top, 0px); height: var(--app-h, 100dvh); display: flex; flex-direction: column; overflow: hidden; }
+#app { position: fixed; left: 0; right: 0; top: var(--app-top, 0px); height: var(--app-h, 100dvh); display: flex; flex-direction: column; overflow: hidden; overflow: clip; }
 @supports not (height: 100dvh) { #app { height: var(--app-h, 100vh); } }
 
 .icon { width: 1.25em; height: 1.25em; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: square; stroke-linejoin: miter; vertical-align: -0.2em; }

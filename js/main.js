@@ -1,6 +1,6 @@
 import { render } from '../vendor/preact.mjs';
 import { useState, useEffect, useCallback } from '../vendor/preact-hooks.mjs';
-import { html, Btn, Icon, ErrorPanel, Spinner, ToastHost, DialogHost } from './ui.js';
+import { html, Btn, Icon, ErrorPanel, Spinner, ToastHost, DialogHost, InputDialogHost } from './ui.js';
 import * as fb from './fb.js';
 import { parseHash } from './lib/route.js';
 import { installViewport } from './lib/viewport.js';
@@ -44,4 +44,4 @@ function App() {
   }
 }
 
-render(html`<${App} /><${ToastHost} /><${DialogHost} />`, document.getElementById('app'));
+render(html`<${App} /><${ToastHost} /><${DialogHost} /><${InputDialogHost} />`, document.getElementById('app'));

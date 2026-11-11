@@ -1,4 +1,4 @@
-import { h, Fragment } from '../vendor/preact.mjs';
+import { h, Fragment, Component } from '../vendor/preact.mjs';
 import { useState, useEffect, useRef } from '../vendor/preact-hooks.mjs';
 import htm from '../vendor/htm.mjs';
 import qrcode from '../vendor/qrcode.mjs';
@@ -119,4 +119,77 @@ export async function copyText(text) {
     document.body.removeChild(ta);
     return ok;
   } catch { return false; }
+}
+
+/* ---------- memo: skip re-rendering a row whose props did not change (42 answers on a phone) ---------- */
+export function memo(Fn, eq = (a, b) => { const ka = Object.keys(a); return ka.length === Object.keys(b).length && ka.every((k) => Object.is(a[k], b[k])); }) {
+  class Memo extends Component {
+    shouldComponentUpdate(next) { return !eq(this.props, next); }
+    render(props) { return h(Fn, props); }
+  }
+  Memo.displayName = `Memo(${Fn.name || 'Component'})`;
+  return Memo;
+}
+
+/* ---------- text input dialog (rename, notes) ---------- */
+const inputBus = new Set();
+export const inputDialog = (opts) => new Promise((resolve) => {
+  if (!inputBus.size) { resolve(window.prompt(opts.title, opts.value ?? '')); return; }
+  inputBus.forEach((f) => f({ ...opts, resolve }));
+});
+export function InputDialogHost() {
+  const [d, setD] = useState(null);
+  const [val, setVal] = useState('');
+  const [err, setErr] = useState('');
+  const ref = useRef(null);
+  useEffect(() => { const on = (x) => { setD(x); setVal(x.value ?? ''); setErr(''); }; inputBus.add(on); return () => inputBus.delete(on); }, []);
+  useEffect(() => { if (d) setTimeout(() => ref.current?.select(), 30); }, [d]);
+  if (!d) return null;
+  const close = (v) => { d.resolve(v); setD(null); };
+  const submit = (e) => {
+    e.preventDefault();
+    const msg = d.validate ? d.validate(val) : '';
+    if (msg) { setErr(msg); return; }
+    close(val);
+  };
+  return html`<div class="scrim" onClick=${(e) => e.target === e.currentTarget && close(null)}>
+    <form class="card dialog stack" role="dialog" aria-modal="true" aria-label=${d.title} onSubmit=${submit}>
+      <h3>${d.title}</h3>
+      <${Field} label=${d.label || 'Nội dung'} error=${err}>
+        <input class="input" ref=${ref} value=${val} maxLength=${d.maxLength || 80} onInput=${(e) => { setVal(e.target.value); setErr(''); }} />
+      <//>
+      <div class="row"><${Btn} class="grow" onClick=${() => close(null)}>Huỷ<//><button type="submit" class="btn btn--primary grow">${d.confirmLabel || 'Lưu'}</button></div>
+    </form></div>`;
+}
+
+/* ---------- full-screen sheet (bank, settings, host script) ---------- */
+export function Sheet({ title, onClose, children, wide, actions }) {
+  useEffect(() => {
+    const on = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, [onClose]);
+  return html`<div class="sheet" role="dialog" aria-modal="true" aria-label=${title}>
+    <header class="sheet__bar"><h2 class="sheet__title">${title}</h2><div class="row row--nowrap">${actions}<${Btn} class="btn--icon" aria-label="Đóng" icon="x" onClick=${onClose} /></div></header>
+    <div class=${`sheet__body scroll ${wide ? 'sheet__body--wide' : ''}`}>${children}</div>
+  </div>`;
+}
+
+/* ---------- number stepper: [-] value [+] ---------- */
+export function Stepper({ value, onChange, min = 0, max = 100, step = 1, label, format = (v) => String(v), disabled, big }) {
+  const set = (v) => onChange(Math.min(max, Math.max(min, Math.round(v * 100) / 100)));
+  return html`<div class=${`stepper ${big ? 'stepper--big' : ''}`} role="group" aria-label=${label}>
+    <${Btn} class="btn--icon" aria-label=${`Giảm ${label || ''}`} icon="minus" disabled=${disabled || value <= min} onClick=${() => set(value - step)} />
+    <span class="stepper__v"><${Tab} text=${format(value)} /></span>
+    <${Btn} class="btn--icon" aria-label=${`Tăng ${label || ''}`} icon="plus" disabled=${disabled || value >= max} onClick=${() => set(value + step)} />
+  </div>`;
+}
+
+/* ---------- read-only box with "Chọn tất cả" (last resort when copying is blocked) ---------- */
+export function SelectAllBox({ text, label = 'Chọn tất cả' }) {
+  const ref = useRef(null);
+  return html`<div class="stack-s">
+    <textarea class="textarea selectall" readonly ref=${ref} value=${text} rows="6" aria-label="Nội dung để sao chép" onFocus=${(e) => e.target.select()}></textarea>
+    <${Btn} small icon="copy" onClick=${() => { ref.current?.focus(); ref.current?.select(); ref.current?.setSelectionRange(0, text.length); }}>${label}<//>
+  </div>`;
 }

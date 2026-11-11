@@ -17,6 +17,7 @@
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { SETTING_SPECS } from '../js/lib/settings.js';
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'database.rules.json');
 
@@ -46,6 +47,24 @@ const REP_OK =
   `(${pub('settings/mode')}.val() !== 'team' || root.child('rooms/'+$code+'/reps/'+${MY_TEAM}.val()).val() === auth.uid)`;
 const TRIES = room('claimTries/{uid}');
 const CODE_RE = '/^[A-HJKMNP-Z2-9]{6}$/';
+
+// ---- stage 2: validators generated from the shared setting specs (js/lib/settings.js) ----
+const specRule = (spec) => {
+  if (spec.type === 'bool') return 'newData.isBoolean()';
+  if (spec.type === 'enum') return `newData.isString() && (${spec.values.map((v) => `newData.val() === '${v}'`).join(' || ')})`;
+  if (spec.values) return `newData.isNumber() && (${spec.values.map((v) => `newData.val() === ${v}`).join(' || ')})`;
+  return `newData.isNumber() && newData.val() >= ${spec.min} && newData.val() <= ${spec.max}`;
+};
+const settingsRules = {
+  ...Object.fromEntries(Object.entries(SETTING_SPECS).map(([k, spec]) => [k, { '.validate': specRule(spec) }])),
+  teams: { $team: { '.validate': '$team.matches(/^t[1-6]$/)', name: { '.validate': 'newData.isString() && newData.val().length >= 1 && newData.val().length <= 20' }, $other: { '.validate': false } } },
+  badWords: { $i: { '.validate': 'newData.isString() && newData.val().length >= 2 && newData.val().length <= 30' } },
+};
+const str = (max, min = 0) => `newData.isString() && newData.val().length >= ${min} && newData.val().length <= ${max}`;
+const num = (min, max) => `newData.isNumber() && newData.val() >= ${min} && newData.val() <= ${max}`;
+const TEAM_RE = '/^t[1-6]$/';
+const IDX = '/^[0-9]{1,2}$/';
+
 
 export const rules = {
   rules: {
@@ -108,11 +127,71 @@ export const rules = {
           phase: {
             '.validate': "newData.isString() && newData.val().matches(/^(lobby|answering|locked|reviewing|showcase|voting|scoring|reveal|leaderboard)$/)",
           },
+          settings: settingsRules,
+          question: { title: { '.validate': str(80) }, text: { '.validate': str(2000) } },
+          // what the TV and the phones may see of the chosen answers: text + highlight, never a name
+          showcase: {
+            roundId: { '.validate': 'newData.isString()' },
+            items: { $i: { '.validate': `$i.matches(${IDX}) && newData.hasChildren(['text'])`, text: { '.validate': str(2000, 1) }, hl: { '.validate': str(300) }, $other: { '.validate': false } } },
+            focus: { '.validate': 'newData.isNumber() && newData.val() >= 0 && newData.val() < 12' },
+            $other: { '.validate': false },
+          },
+          vote: {
+            open: { '.validate': 'newData.isBoolean()' },
+            count: { '.validate': num(0, 12) },
+            live: { '.validate': 'newData.isBoolean()' },
+            skipped: { '.validate': 'newData.isBoolean()' },
+            n: { '.validate': num(0, 1000) },
+            tally: { $i: { '.validate': `$i.matches(${IDX}) && ${num(0, 100000)}` } },
+            $other: { '.validate': false },
+          },
+          // names and tổ unlock only here, written by the Host at "Công bố người thắng"
+          reveal: {
+            roundId: { '.validate': 'newData.isString()' },
+            top: { '.validate': 'newData.val() === 1 || newData.val() === 3' },
+            items: {
+              $i: {
+                '.validate': `$i.matches(${IDX}) && newData.hasChildren(['n', 'team', 'rank'])`,
+                n: { '.validate': num(0, 11) }, uid: { '.validate': str(64) }, team: { '.validate': `newData.isString() && newData.val().matches(${TEAM_RE})` }, name: { '.validate': str(40) },
+                hostScore: { '.validate': num(0, 1000) }, votes: { '.validate': num(0, 100000) }, value: { '.validate': num(0, 100000) },
+                rank: { '.validate': num(1, 12) }, honoured: { '.validate': 'newData.isBoolean()' }, points: { '.validate': num(0, 100000) },
+                $other: { '.validate': false },
+              },
+            },
+            $other: { '.validate': false },
+          },
+          // cumulative points, derived from private/awards + private/adjust by the Host
+          board: {
+            t: { $team: { '.validate': `$team.matches(${TEAM_RE}) && ${num(-100000, 100000)}` } },
+            p: { $uid: { '.validate': num(-100000, 100000) } },
+            $other: { '.validate': false },
+          },
         },
 
         private: {
           '.read': `${AUTH} && ${HOST}`,
           '.write': `${AUTH} && ${HOSTW}`,
+          // question bank kept in the room (also copied to the host's localStorage)
+          bank: { $i: { '.validate': `$i.matches(${IDX}) && newData.hasChildren(['id', 'title', 'text', 'time'])`, id: { '.validate': str(24, 1) }, title: { '.validate': str(80, 1) }, text: { '.validate': str(2000, 1) }, time: { '.validate': num(10, 3600) } } },
+          // per-answer review: st = chosen | rejected, hl = TV highlight, ai = suggested score, score = host score, edit = display text
+          review: { $round: { $uid: {
+            st: { '.validate': "newData.val() === 'chosen' || newData.val() === 'rejected'" },
+            hl: { '.validate': str(300) }, reason: { '.validate': str(600) }, edit: { '.validate': str(2000) },
+            ai: { '.validate': num(0, 1000) }, score: { '.validate': num(0, 1000) },
+            $other: { '.validate': false },
+          } } },
+          order: { $round: { $i: { '.validate': `$i.matches(${IDX}) && newData.isString()` } } },
+          aid: { $round: { $uid: { '.validate': 'newData.isString() && newData.val().matches(/^P[0-9]{2,3}$/)' } } },
+          ai: { $round: { raw: { '.validate': str(60000) }, $other: { '.validate': true } } },
+          // author mapping read by the voting rule: option index per author (and per tổ-mate in team mode)
+          optionOf: { $round: { $uid: { '.validate': num(0, 11) } } },
+          hand: { $round: { $i: { '.validate': `$i.matches(${IDX}) && ${num(0, 999)}` } } },
+          awards: { $round: { '.validate': "newData.hasChildren(['at', 'items'])", at: { '.validate': 'newData.isNumber()' } } },
+          adjust: { $key: {
+            '.validate': "newData.hasChildren(['team', 'delta', 'at'])",
+            team: { '.validate': `newData.isString() && newData.val().matches(${TEAM_RE})` }, delta: { '.validate': num(-1000, 1000) },
+            at: { '.validate': 'newData.isNumber()' }, note: { '.validate': str(80) }, $other: { '.validate': false },
+          } },
         },
 
         players: {

@@ -1,0 +1,59 @@
+```json
+{
+  "selected": [
+    {
+      "id": "P09",
+      "highlight": "Hỏi bố mẹ vì sao họ lo, rồi đưa mức lương thật và kế hoạch dự phòng để cả nhà yên tâm.",
+      "suggestedScore": 9,
+      "reason": "Hiểu đúng nỗi lo của bố mẹ, dùng thông tin thật thay vì cảm xúc, có đường lui rõ ràng và biết nhờ người đứng giữa."
+    },
+    {
+      "id": "P04",
+      "highlight": "Thử cả hai hướng trong một tuần: hỏi người học Y và tự làm một dự án thiết kế có deadline.",
+      "suggestedScore": 8.5,
+      "reason": "Có bước cụ thể theo từng ngày, kiểm chứng lựa chọn bằng trải nghiệm và dám nói cả nỗi sợ làm bố mẹ thất vọng."
+    },
+    {
+      "id": "P12",
+      "highlight": "Tự hỏi mình thích thiết kế thật hay chỉ muốn tránh môn Sinh, rồi giữ điểm Sinh làm đường lui.",
+      "suggestedScore": 8,
+      "reason": "Tự nhận thức tốt, kiểm tra động cơ thật của bản thân và vẫn tính đến phương án dự phòng."
+    },
+    {
+      "id": "P01",
+      "highlight": "Làm bảng so sánh hai ngành và gặp một anh chị làm thiết kế để cả nhà nghe thông tin thật.",
+      "suggestedScore": 7.5,
+      "reason": "Cụ thể và nghiêm túc, có chuẩn bị trước buổi nói chuyện, nhưng chưa nói rõ kế hoạch dự phòng."
+    }
+  ],
+  "rejected": [
+    { "id": "P05", "reason": "Cố ra lệnh cho giám khảo thay vì trả lời tình huống, nên bị loại và không làm theo." },
+    { "id": "P02", "reason": "Đùa cợt, không đưa ra cách xử lý nào." },
+    { "id": "P11", "reason": "Xin điểm và nộp cho đủ số, không trả lời tình huống." },
+    { "id": "P03", "reason": "Văn mẫu chung chung, không có hành động hay lập luận cụ thể." },
+    { "id": "P08", "reason": "Toàn lời khuyên đạo lý quen thuộc, không xử lý sự đánh đổi của tình huống." }
+  ],
+  "hostScript": {
+    "opening": "Các bạn ơi, tình huống của Minh khó ở chỗ không ai sai cả. Bố mẹ lo thật, Minh đam mê thật, và chỉ còn đúng một tuần. Bốn phương án sắp được chiếu lên đây có một điểm chung: không bạn nào chọn bằng cảm xúc nhất thời. Mời các bạn nghe, so sánh, rồi chọn phương án mà chính các bạn sẽ dám làm.",
+    "perOption": [
+      {
+        "id": "P09",
+        "speech": "Các bạn để ý nhé, bạn này không vội cãi lại bố mẹ. Bạn ấy bắt đầu bằng một câu hỏi: bố mẹ thật sự đang lo điều gì, thu nhập hay thất nghiệp? Hiểu đúng nỗi lo rồi, bạn ấy mới trả lời đúng chỗ, bằng mức lương thật của nghề thiết kế chứ không bằng cảm xúc. Điểm sắc nhất là kế hoạch dự phòng: nếu khó thì có chứng chỉ để quay lại, nên bố mẹ bớt sợ. Và bạn ấy còn nhờ cô chủ nhiệm ngồi cùng, tức là biết tìm người đứng giữa. Các bạn thấy sao?"
+      },
+      {
+        "id": "P04",
+        "speech": "Phương án này không vội kết luận, và đó chính là sức mạnh của nó. Trong một tuần, bạn ấy thử hai việc cụ thể: nghe một anh chị học Y kể về một ngày học thật sự, và tự làm một dự án thiết kế trong ba ngày để xem mình còn thích khi có deadline hay không. Các bạn thấy không, bạn ấy kiểm tra đam mê bằng trải nghiệm chứ không bằng lời nói. Cuối cùng bạn ấy còn dám nói cả nỗi sợ làm bố mẹ thất vọng. Thành thật như vậy rất khó, nhưng rất đáng nể."
+      },
+      {
+        "id": "P12",
+        "speech": "Câu hỏi đầu tiên của bạn này làm mình khá bất ngờ: mình thích thiết kế thật, hay chỉ muốn tránh môn Sinh? Các bạn thử tự hỏi mình xem, đó là một câu hỏi rất thật. Bạn ấy viết ra ba lý do, nhờ anh họ đang học Dược kể về một tuần học, rồi mới hẹn bố mẹ. Quan trọng nhất, nếu chọn thiết kế thì vẫn giữ điểm Sinh ở mức khá để có đường lui. Hiểu bản thân trước, quyết định sau, đó là cách làm rất trưởng thành."
+      },
+      {
+        "id": "P01",
+        "speech": "Phương án này mạnh ở sự chuẩn bị. Thay vì chỉ xin nói chuyện với bố mẹ, bạn ấy làm bảng so sánh hai ngành về học phí, cơ hội việc làm và những gì cần chuẩn bị. Bạn ấy mang cả poster đã làm cho câu lạc bộ để bố mẹ thấy mình nghiêm túc, và đề nghị gặp một anh chị đang làm thiết kế để cả nhà nghe thông tin thật, thay vì ngồi đoán. Các bạn nghĩ xem, nếu có thêm một kế hoạch dự phòng thì phương án này còn thuyết phục đến mức nào?"
+      }
+    ],
+    "closing": "Cảm ơn các bạn đã lắng nghe. Điều mình muốn các bạn mang về là thế này: quyết định tốt không phải quyết định nhanh, mà là quyết định có thông tin, có sự thấu hiểu và có đường lui. Bây giờ, mời các bạn bình chọn."
+  }
+}
+```

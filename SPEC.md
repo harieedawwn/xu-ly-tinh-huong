@@ -87,6 +87,24 @@ Everything below was added after the product spec above (which is unchanged).
 /rooms/{code}/votes/{round}/{uid} = index   one per uid
 /rooms/{code}/banned/{uid} = true
 ```
+Stage 2 adds (all validated in the rules; `private/*` is host-only, `public/*` is host-write / all-read):
+```
+public/settings            + defaultSecs, addMs, aiN, aiHideNames, aiCriteria, phoneVoting, liveTally, maxScore, scoreStep, formula, voteWeight,
+                             awardTop, teamAward, tvTheme, tvSize, tvSound, tvQr, badWords[]   (ranges: js/lib/settings.js, shared with the rules generator)
+public/showcase            {roundId, items:[{text, hl}], focus}      text + highlight only, never a name
+public/vote                {open, count, live, n, tally[], skipped}  n = phone votes cast, tally = live counts (hand + phone), written by the Host
+public/reveal              {roundId, top, items:[{n, uid, team, name, hostScore, votes, value, rank, honoured, points}]}  names unlock here
+public/board              {t:{team:points}, p:{uid:points}}          derived from private/awards + private/adjust
+private/bank               [{id, title, text, criteria[], time}]     question bank (also in the Host's localStorage)
+private/review/{round}/{uid}  {st:'chosen'|'rejected', hl, ai, score, reason, edit}   edit = display text; the student's original stays in answers/
+private/order/{round}      [uid,...]   chosen answers in showcase order (changed through a transaction)
+private/aid/{round}/{uid}  "P07"       stable short ids, assigned once by a transaction, never reused
+private/ai/{round}         {at, status, raw, script, foundIds, warnings}   the pasted AI reply and the host script
+private/optionOf/{round}/{uid} = option index   author mapping read by the voting rule (team mode: also every tổ-mate of the author)
+private/hand/{round}/{i}   hand-raise count (atomic increment, rule refuses < 0)
+private/awards/{round}     {at, top, method, formula, items[...], teams{}, players{}}   one award per round (idempotent); also the results history
+private/adjust/{key}       {team, delta, at, note}   manual +/- of tổ points (the visible log)
+```
 Rules source: `tools/build-rules.mjs` generates `database.rules.json` (`node tools/build-rules.mjs`; a unit test fails if they drift). RTDB rules have no `newRoot`: multi-path creation uses `newData.parent()`.
 
 Timer node: `{state:'idle'|'running'|'paused', durationMs, endsAt?, remainingMs?}`. `endsAt` is in server time. Clients use `.info/serverTimeOffset`. Answer rule: `(state=='running' && now <= endsAt + graceMs) || state=='paused'`.
@@ -94,6 +112,22 @@ Timer node: `{state:'idle'|'running'|'paused', durationMs, endsAt?, remainingMs?
 Team ids are `t1..t6` (strings) so rules can build paths from them.
 
 Kick = ban + remove roster + clear presence + free the rep slot (hosts may clear anybody's presence).
+
+## Stage 2 decisions
+
+**Phase machine.** `js/lib/phases.js` holds every transition as a pure function over the `public` node (`transition(pub, action, args)`); screens only render and call it. `js/lib/tx.js` applies it inside a transaction on `rooms/{code}/public`, so two Host devices pressing the same step cannot both win (the loser gets "Trạng thái phòng vừa thay đổi"). Steps back: reopen answering, back to locked, back to review, back to showcase (clears votes), reopen voting, undo the award. `ABANDON` returns to the lobby. After every phase change the dock buttons are disabled for 700 ms so a double tap, or a late tap from the second device, cannot hit the next step's button.
+
+**Stable ids and the AI round trip.** Answers get `P01..` in first-submit order the moment the round is locked (transaction; late answers continue the numbering, numbers are never reused). `Ẩn tên khi xuất` removes both the name and the tổ from the prompt. The copied prompt follows the three parts of the product spec; the answers are one JSON object per line, so a student's text can never break out of its record. The parser (`js/lib/ai.js`) accepts fenced or bare JSON with prose around it, smart quotes as delimiters, trailing commas, missing commas, unquoted keys, unescaped `"` inside Vietnamese text, ids like `p7`; it ignores unknown ids and repeated ids with a warning, treats an id that is both selected and rejected as rejected, clamps scores to the room maximum and step, and falls back to "free text": P-ids found in the text are pre-ticked for the Host and the raw text goes to the reading panel. `answer-tools.looksLikeInjection` flags answers that talk to the judge; the app flags them in the list and **never auto-selects them** even if the AI picked them (the Host can still tick one by hand). The Host script is stored in `private/ai/{round}`; the reading panel shows one page per option in the current showcase order, large type, swipe or Trước/Sau, wake lock while open.
+
+**Showcase and voting.** Options are the chosen answers in `private/order`; answers whose author has left the room are dropped. Pushing writes `public/showcase` and `private/optionOf` (in team mode the author's tổ-mates are mapped too, so nobody votes for their own tổ). Votes per option = phone votes (`votes/{round}/{uid}`, one per uid, changeable while open, only for players still in the roster) + hand-raise counts. The Host publishes the live tally with a 0.7 s debounce, only when `liveTally` is on.
+
+**Scoring.** Host score is snapped to the step (0.5 or 1) within 0..max. Vote points = max score x votes / highest vote count. Final value: `host` = host score; `mix` = (1-w) x host + w x vote points (w = voteWeight %); `votes` = vote points. Ranking: final, then host score, then votes, then earlier first submission, then option order, so ranks are strictly 1..n. Award per round: `sum` = every showcased option earns its final value for its author and tổ; `place` = only the honoured top 1 or top 3 earn 3/2/1. In team mode the representative is the author. `public/board` is derived from awards + adjustments and re-synced by the Host (also heals a reveal whose award write was lost). Undo removes the newest award (any round); if it belongs to the round on screen the phase goes back to scoring. Manual +/- of tổ points are entries in `private/adjust` (the log) and are not undone by undo.
+
+**Exports.** CSV is UTF-8 with BOM and CRLF; cells starting with `= + - @` get a leading `'` so student text is never run as a formula. Where downloads are blocked (Zalo user agent, or the browser refuses) the file text is copied instead; if the clipboard is blocked too, a select-all box is shown.
+
+**TV settings.** The Host's theme and text size apply to the TV when they change (a TV set up by hand keeps its own choice until the Host changes something). Last-10-seconds sound uses WebAudio and needs one touch on the TV page to be allowed by the browser.
+
+**Limits.** Two Hosts editing the same text field at once is last-write-wins; order, bank, ids, hand counts and phase changes are atomic. Votes are integers by convention (the rule checks the range; the Host ignores non-integers).
 
 ## Deploying
 - Site: push `main`; Pages serves it. Local: `node tools/serve.mjs` (http://127.0.0.1:5173/). `?emu=1` on localhost points the app to the local emulators.
@@ -105,6 +139,9 @@ Kick = ban + remove roster + clear presence + free the rep slot (hosts may clear
 - `node tools/rules-test.mjs`: the same against the real database (needs rules deployed). Uses a throwaway room and deletes it.
 - `node tools/with-emulator.mjs node tools/e2e.mjs`: host + TV + 3 players in separate browsers, screenshots in `docs/screenshots/`.
 - `E2E_URL=https://harieedawwn.github.io/xu-ly-tinh-huong/ node tools/e2e.mjs --live`: the same loop on the live site.
+- `node tools/with-emulator.mjs node tools/e2e-s2.mjs`: stage 2, host + TV + 3 players, two full rounds (screenshots in `docs/screenshots/s2/`).
+- `node tools/with-emulator.mjs node tools/perf-s2.mjs`: 42 answers on a throttled phone, AI round trip in the UI, clipboard and download fallbacks.
+- `node tools/ai-roundtrip.mjs` (builds the export for the 12 fake answers) and `--verify` (imports `tools/fixtures/ai-roundtrip.txt`).
 
 # Acceptance list
 
@@ -137,16 +174,17 @@ Status marks: `[x]` verified (evidence in PLAN.md), `[ ]` not yet.
 - [ ] [S1] Live URL https://harieedawwn.github.io/xu-ly-tinh-huong/ runs the loop (after the user enables Pages and deploys the rules).
 
 ## Stage 2 - full host pipeline
-- [ ] [S2] Question bank: add/edit/delete/duplicate/reorder, criteria, default time, JSON export/import, localStorage copy.
-- [ ] [S2] Tổ count 2-6 and editable tổ names; rename and move players; host-added profanity words.
-- [ ] [S2] Answer list: filters, search, near-duplicate flags, display-text edit with original kept.
-- [ ] [S2] AI export: prompt with the 3 parts, ids P01.., hide-names option, clipboard fallback chain, TXT/JSON download with copy fallback, ChatGPT/Claude/Gemini buttons.
-- [ ] [S2] AI import: tolerant parser (fences, smart quotes, trailing commas, missing fields, unknown ids) + host-only reading panel + manual pick fallback.
-- [ ] [S2] Showcase (Phương án 1..n, names hidden), reorder, quick edit, push to TV.
-- [ ] [S2] Voting: hand-raise steppers and phone voting (own option blocked), TV tally.
-- [ ] [S2] Scoring formulas, ranking and tie-breaks, reveal with top 1/3, tổ and individual leaderboards, undo, manual adjustment log.
-- [ ] [S2] Settings panel (all groups), CSV with BOM + JSON export, reset points.
-- [ ] [S2] Reviewing/showcase/voting/reveal/leaderboard views on TV and player.
+- [x] [S2] Question bank: add/edit/delete/duplicate/reorder, criteria, default time, JSON export/import, localStorage copy.
+- [x] [S2] Tổ count 2-6 and editable tổ names; rename and move players; host-added profanity words.
+- [x] [S2] Answer list: filters, search, near-duplicate flags, display-text edit with original kept.
+- [x] [S2] AI export: prompt with the 3 parts, ids P01.., hide-names option, clipboard fallback chain, TXT/JSON download with copy fallback, ChatGPT/Claude/Gemini buttons.
+- [x] [S2] AI import: tolerant parser (fences, smart quotes, trailing commas, missing fields, unknown ids) + host-only reading panel + manual pick fallback.
+- [x] [S2] Showcase (Phương án 1..n, names hidden), reorder, quick edit, push to TV.
+- [x] [S2] Voting: hand-raise steppers and phone voting (own option blocked), TV tally.
+- [x] [S2] Scoring formulas, ranking and tie-breaks, reveal with top 1/3, tổ and individual leaderboards, undo, manual adjustment log.
+- [x] [S2] Settings panel (all groups), CSV with BOM + JSON export, reset points.
+- [x] [S2] Reviewing/showcase/voting/reveal/leaderboard views on TV and player.
+- [ ] [S2] Stage-2 rules cases pass on the REAL database (`node tools/rules-test.mjs` after the owner deploys `database.rules.json`).
 
 ## Stage 3 - hardening and review
 - [ ] [S3] Zalo in-app browser, iPhone Safari, Android Chrome checks on real devices: toolbar, keyboard, fullscreen offer and iPhone tip.

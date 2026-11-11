@@ -6,7 +6,7 @@ export const SCENARIOS = [
     title: 'Y Dược hay thiết kế',
     time: 120,
     text:
-      'Bố mẹ Minh muốn cậu đăng ký tổ hợp môn khối B để thi vào Y hoặc Dược. Họ nói nghề bác sĩ ổn định, họ hàng ai cũng ủng hộ,. ' +
+      'Bố mẹ Minh muốn cậu đăng ký tổ hợp môn khối B để thi vào Y hoặc Dược. Họ nói nghề bác sĩ ổn định, họ hàng ai cũng ủng hộ. ' +
       'Nhưng Minh lại mê thiết kế đồ họa: cậu tự học phần mềm hơn một năm, từng làm poster cho câu lạc bộ của trường và thấy mình thật sự sống động khi làm việc đó. ' +
       'Hạn đăng ký tổ hợp môn chỉ còn một tuần. Nếu chọn theo bố mẹ, Minh sợ mình sẽ học mà không có hứng thú. Nếu chọn theo mình, cậu sợ làm bố mẹ thất vọng và không có đường lui. ' +
       'Nếu em là Minh, em sẽ làm gì trong một tuần này?',

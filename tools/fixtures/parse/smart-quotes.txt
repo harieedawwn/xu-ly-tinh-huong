@@ -1,0 +1,8 @@
+{
+  “selected”: [
+    { “id”: “P01”, “highlight”: “Gặp cô chủ nhiệm trước.”, “suggestedScore”: 8, “reason”: “Có người hỗ trợ.” },
+    { “id”: “P04”, “highlight”: “Lập bảng việc cần làm.”, “suggestedScore”: 7, “reason”: “Rõ ràng.” }
+  ],
+  “rejected”: [ { “id”: “P02”, “reason”: “Lạc đề.” } ],
+  “hostScript”: { “opening”: “Xin chào.”, “perOption”: [ { “id”: “P01”, “speech”: “Lời cho P01.” } ], “closing”: “Tạm biệt.” }
+}

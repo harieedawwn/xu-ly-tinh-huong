@@ -190,7 +190,7 @@ async function main() {
   await P3.getByRole('heading', { name: 'Hết giờ' }).waitFor();
   check('p3 sees locked state', true);
   await shot(P3, '41-locked-390');
-  await H.getByRole('button', { name: /Câu tiếp theo/ }).waitFor();
+  await H.getByRole('button', { name: /Bắt đầu chấm bài/ }).waitFor();
   check('host sees phase locked (auto-lock)', true);
 
   console.log('\n== reload (F5) restores state');
@@ -201,7 +201,7 @@ async function main() {
   await T.getByText('Hết giờ').waitFor({ timeout: 30000 });
   check('TV reload -> same view', true);
   await H.reload();
-  await H.getByRole('button', { name: /Câu tiếp theo/ }).waitFor({ timeout: 30000 });
+  await H.getByRole('button', { name: /Bắt đầu chấm bài/ }).waitFor({ timeout: 30000 });
   check('host reload -> still host, same phase', true);
 
   console.log('\n== layouts');
@@ -213,7 +213,7 @@ async function main() {
   const W = await ctx2.newPage();
   W.on('pageerror', (e) => errors.push(`hostwide pageerror: ${e.message}`));
   await W.goto(withBase(`#/host/${code}`));
-  await W.getByRole('button', { name: /Câu tiếp theo/ }).waitFor({ timeout: 30000 });
+  await W.getByRole('button', { name: /Bắt đầu chấm bài/ }).waitFor({ timeout: 30000 });
   check('host on a laptop shows all three panels', (await W.locator('.host__col:visible').count()) === 3);
   check('host 1440: no horizontal overflow', await noOverflow(W));
   await shot(W, '33-host-1440');
@@ -228,10 +228,10 @@ async function main() {
   await O.getByRole('button', { name: 'Vào bảng Host' }).click();
   await O.getByText(/PIN chưa đúng\. Còn 7 lần thử/).waitFor({ timeout: 15000 });
   check('wrong PIN is refused with attempts left', true);
-  check('no host UI after a wrong PIN', (await O.getByRole('button', { name: /Câu tiếp theo/ }).count()) === 0);
+  check('no host UI after a wrong PIN', (await O.getByRole('button', { name: /Bắt đầu chấm bài/ }).count()) === 0);
   await O.locator('.input--pin').fill(pin);
   await O.getByRole('button', { name: 'Vào bảng Host' }).click();
-  await O.getByRole('button', { name: /Câu tiếp theo/ }).waitFor({ timeout: 15000 });
+  await O.getByRole('button', { name: /Bắt đầu chấm bài/ }).waitFor({ timeout: 15000 });
   check('right PIN makes the second device a host', true);
   await other.ctx.close();
 
@@ -242,6 +242,8 @@ async function main() {
   await P2.getByRole('heading', { name: 'Bạn đã rời phòng' }).waitFor({ timeout: 15000 });
   check('kicked player is removed and banned', true);
   await H.getByRole('button', { name: /Điều khiển/ }).click();
+  await H.getByRole('button', { name: 'Cài đặt', exact: true }).click();
+  await H.locator('summary', { hasText: 'Dữ liệu' }).click();
   await H.getByRole('button', { name: /Kết thúc và xoá phòng/ }).click();
   await H.getByRole('button', { name: 'Xoá phòng', exact: true }).click();
   await H.waitForURL(/#\/$/, { timeout: 15000 });

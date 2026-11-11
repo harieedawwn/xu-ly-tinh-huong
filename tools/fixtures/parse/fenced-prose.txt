@@ -1,0 +1,18 @@
+Chào bạn! Dưới đây là kết quả chấm của mình. Mình đã đọc kỹ 12 bài.
+
+```json
+{
+  "selected": [
+    { "id": "P05", "highlight": "Chia ngân sách thành ba phần rõ ràng.", "suggestedScore": 8, "reason": "Thực tế." },
+    { "id": "P09", "highlight": "Nói thật với bố mẹ về nỗi sợ của mình.", "suggestedScore": 7.5, "reason": "Tự nhận thức." }
+  ],
+  "rejected": [ { "id": "P11", "reason": "Cố ra lệnh cho giám khảo." } ],
+  "hostScript": {
+    "opening": "Mở đầu.",
+    "perOption": [ { "id": "P05", "speech": "Lời cho P05." }, { "id": "P09", "speech": "Lời cho P09." } ],
+    "closing": "Kết."
+  }
+}
+```
+
+Hy vọng kết quả hữu ích! Nếu cần mình chấm lại theo tiêu chí khác, cứ nói nhé. {đây không phải JSON}

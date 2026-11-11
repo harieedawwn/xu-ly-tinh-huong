@@ -28,4 +28,6 @@ export const K = {
   tvSize: 'xlth.tv.size',
   playerSize: 'xlth.player.size',
   recentCode: 'xlth.recentCode',
+  bank: 'xlth.bank',
+  hostWake: 'xlth.host.wake',
 };

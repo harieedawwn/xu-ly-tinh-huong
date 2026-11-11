@@ -1,0 +1,1 @@
+{"selected":[{"id":"P01"},{"id":"P03","highlight":"Chỉ có highlight."},{"id":"P05","suggestedScore":"8,5"},{"id":"P06","suggestedScore":42,"highlight":"Điểm quá lớn."}]}

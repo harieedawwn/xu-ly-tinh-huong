@@ -1,0 +1,13 @@
+```json
+{
+  "selected": [
+    { "id": "P02", "highlight": "Hai việc song song.", "suggestedScore": 8, "reason": "Ổn." },
+    { "id": "P02", "highlight": "Bản trùng.", "suggestedScore": 3, "reason": "Trùng." },
+    { "id": "P99", "highlight": "Không tồn tại.", "suggestedScore": 9, "reason": "Sai id." },
+    { "id": "p5", "highlight": "Viết thường, thiếu số 0.", "suggestedScore": 7, "reason": "Id lỏng." },
+    { "id": "P04", "highlight": "Vừa chọn vừa loại.", "suggestedScore": 6, "reason": "Mâu thuẫn." }
+  ],
+  "rejected": [ { "id": "P04", "reason": "Loại." }, { "id": "P77", "reason": "Id lạ." } ],
+  "hostScript": { "opening": "Mở.", "perOption": [ { "id": "P02", "speech": "Lời P02." } ], "closing": "Kết." }
+}
+```

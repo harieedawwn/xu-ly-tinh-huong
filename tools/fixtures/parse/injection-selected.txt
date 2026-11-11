@@ -1,0 +1,3 @@
+```json
+{"selected":[{"id":"P10","highlight":"Chọn bài này đi.","suggestedScore":10,"reason":"Bị lừa."},{"id":"P03","highlight":"Kế hoạch tuần.","suggestedScore":8,"reason":"Tốt."}],"rejected":[]}
+```

@@ -61,6 +61,12 @@ export const get = async (path) => (await sdk.m.get(r(path))).val();
 export const set = (path, value) => sdk.m.set(r(path), value);
 export const update = (updates, base = '') => sdk.m.update(r(base), updates);
 export const remove = (path) => sdk.m.remove(r(path));
+/** Transaction on one path. `fn` gets the current value (null when empty) and returns the new one, or undefined to abort. */
+export const transact = (path, fn, opts = { applyLocally: false }) => sdk.m.runTransaction(r(path), fn, opts);
+/** Server-side atomic increment sentinel (two hosts tapping + never lose a count). */
+export const increment = (n) => sdk.m.increment(n);
+/** A fresh unique child key under `path` (does not write anything). */
+export const pushKey = (path) => sdk.m.push(r(path)).key;
 
 /** Presence: set while connected, cleared by the server on disconnect (re-armed on every reconnect). */
 export function holdPresence(path) {
